@@ -4,6 +4,8 @@ import FileUpload from './components/FileUpload';
 import SchemaViewer from './components/SchemaViewer';
 import PipelineViewer from './components/PipelineViewer';
 import Dashboard from './components/Dashboard';
+import RuleModifier from './components/RuleModifier';
+import AuditLog from './components/AuditLog';
 import './App.css';
 
 interface UploadData {
@@ -140,6 +142,27 @@ function App() {
     await generatePipeline();
   };
 
+  const handleRuleApplied = (result: any) => {
+    console.log('Rule applied successfully:', result);
+    
+    // Update pipeline data
+    if (result.pipeline) {
+      setPipelineData({
+        pipelineId: result.pipelineId,
+        pipeline: result.pipeline,
+        preview: result.data.slice(0, 10)
+      });
+    }
+    
+    // Update chart data
+    if (result.data && result.pipeline?.chartConfig) {
+      setChartData({
+        data: result.data,
+        chartConfig: result.pipeline.chartConfig
+      });
+    }
+  };
+
   const handleReset = () => {
     setUploadData(null);
     setIsSchemaApproved(false);
@@ -203,15 +226,15 @@ function App() {
               <span className="ml-2 font-medium">Pipeline</span>
             </div>
             <div className="w-16 h-0.5 bg-gray-300"></div>
-            <div className="flex items-center text-gray-400">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold">
+            <div className={`flex items-center ${chartData ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${chartData ? 'bg-blue-100' : 'bg-gray-100'}`}>
                 3
               </div>
               <span className="ml-2 font-medium">Rules</span>
             </div>
             <div className="w-16 h-0.5 bg-gray-300"></div>
-            <div className="flex items-center text-gray-400">
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold">
+            <div className={`flex items-center ${chartData ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${chartData ? 'bg-blue-100' : 'bg-gray-100'}`}>
                 4
               </div>
               <span className="ml-2 font-medium">Audit</span>
@@ -324,11 +347,42 @@ function App() {
 
             {/* Dashboard with Chart */}
             {chartData && !isLoadingData && (
-              <Dashboard
-                data={chartData.data}
-                chartConfig={chartData.chartConfig}
-                confidence={getAverageConfidence()}
-              />
+              <>
+                <Dashboard
+                  data={chartData.data}
+                  chartConfig={chartData.chartConfig}
+                  confidence={getAverageConfidence()}
+                />
+
+                {/* Phase 3: Rule Modifier */}
+                <div className="mt-8">
+                  <div className="text-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                      Phase 3: Modify Rules
+                    </h2>
+                    <p className="text-lg text-gray-600">
+                      Describe changes in plain English and Bob will update the pipeline
+                    </p>
+                  </div>
+                  <RuleModifier
+                    sessionId={uploadData.sessionId}
+                    onRuleApplied={handleRuleApplied}
+                  />
+                </div>
+
+                {/* Phase 4: Audit Trail */}
+                <div className="mt-8">
+                  <div className="text-center mb-6">
+                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                      Phase 4: Audit Trail
+                    </h2>
+                    <p className="text-lg text-gray-600">
+                      Complete history of all actions and decisions
+                    </p>
+                  </div>
+                  <AuditLog sessionId={uploadData.sessionId} />
+                </div>
+              </>
             )}
           </div>
         )}
@@ -343,7 +397,7 @@ function App() {
             </p>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
               <span>
-                {!uploadData ? 'Phase 1' : !isSchemaApproved ? 'Phase 1' : 'Phase 2'} of 4
+                {!uploadData ? 'Phase 1' : !isSchemaApproved ? 'Phase 1' : !chartData ? 'Phase 2' : 'Phase 3-4'} of 4
               </span>
               <span>•</span>
               <span>MVP Demo</span>

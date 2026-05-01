@@ -365,6 +365,272 @@ router.get('/data/:sessionId', async (req, res) => {
   }
 });
 
+/**
+ * Modify pipeline based on plain English rule using IBM Bob
+ */
+async function modifyPipelineWithRule(currentCode, userRule, chartConfig) {
+  // For now, use mock response
+  // TODO: Integrate real IBM Bob SDK when credentials are available
+  
+  if (isIBMConfigured()) {
+    console.log('Using IBM Bob for intent translation...');
+    // Real IBM Bob integration would go here
+    // const result = await callIBMBob(currentCode, userRule);
+    // return result;
+  }
+  
+  console.log('Using mock intent translation...');
+  
+  // Parse user intent and modify code accordingly
+  const lowerRule = userRule.toLowerCase();
+  let modifiedCode = currentCode;
+  let explanation = '';
+  let changes = [];
+  
+  // Handle common rule patterns
+  if (lowerRule.includes('exclude') || lowerRule.includes('filter')) {
+    // Extract filter condition
+    if (lowerRule.includes('less than') || lowerRule.includes('<')) {
+      const match = lowerRule.match(/(\d+)/);
+      const threshold = match ? match[1] : '100';
+      
+      modifiedCode = currentCode.replace(
+        'const transformed = data.map',
+        `const transformed = data.filter(row => parseFloat(row['${chartConfig.metricColumn}']) >= ${threshold}).map`
+      );
+      
+      explanation = `Applied filter to exclude rows where ${chartConfig.metricColumn} is less than ${threshold}`;
+      changes.push(`Added filter: ${chartConfig.metricColumn} >= ${threshold}`);
+    } else if (lowerRule.includes('greater than') || lowerRule.includes('>')) {
+      const match = lowerRule.match(/(\d+)/);
+      const threshold = match ? match[1] : '100';
+      
+      modifiedCode = currentCode.replace(
+        'const transformed = data.map',
+        `const transformed = data.filter(row => parseFloat(row['${chartConfig.metricColumn}']) > ${threshold}).map`
+      );
+      
+      explanation = `Applied filter to show only rows where ${chartConfig.metricColumn} is greater than ${threshold}`;
+      changes.push(`Added filter: ${chartConfig.metricColumn} > ${threshold}`);
+    }
+  }
+  
+  if (lowerRule.includes('top') && lowerRule.match(/\d+/)) {
+    const match = lowerRule.match(/top\s+(\d+)/i);
+    const limit = match ? match[1] : '10';
+    
+    if (!modifiedCode.includes('.slice(')) {
+      modifiedCode = modifiedCode.replace(
+        'return transformed.sort',
+        `return transformed.sort`
+      ).replace(
+        ');',
+        `).slice(0, ${limit});`
+      );
+      
+      explanation += (explanation ? ' and limited' : 'Limited') + ` results to top ${limit} items`;
+      changes.push(`Limited to top ${limit} results`);
+    }
+  }
+  
+  if (lowerRule.includes('sort') || lowerRule.includes('order')) {
+    if (lowerRule.includes('ascending') || lowerRule.includes('asc')) {
+      modifiedCode = modifiedCode.replace(
+        'b.value - a.value',
+        'a.value - b.value'
+      );
+      explanation += (explanation ? ' and sorted' : 'Sorted') + ' in ascending order';
+      changes.push('Changed sort order to ascending');
+    } else if (lowerRule.includes('descending') || lowerRule.includes('desc')) {
+      if (!modifiedCode.includes('b.value - a.value')) {
+        modifiedCode = modifiedCode.replace(
+          'a.value - b.value',
+          'b.value - a.value'
+        );
+        explanation += (explanation ? ' and sorted' : 'Sorted') + ' in descending order';
+        changes.push('Changed sort order to descending');
+      }
+    }
+  }
+  
+  // If no modifications were made, provide a helpful message
+  if (modifiedCode === currentCode) {
+    explanation = `I understood your request: "${userRule}", but couldn't apply specific modifications. Try rules like "exclude values less than 100" or "show top 10 results".`;
+    changes.push('No code modifications applied');
+  }
+  
+  return {
+    modified_code: modifiedCode,
+    explanation,
+    changes
+  };
+}
+
+/**
+ * POST /api/rules/:sessionId
+ * Add a rule modification to the pipeline
+ */
+router.post('/rules/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { rule } = req.body;
+    
+    if (!rule || typeof rule !== 'string') {
+      return res.status(400).json({ error: 'Rule text is required' });
+    }
+    
+    console.log(`📝 Applying rule to session ${sessionId}: "${rule}"`);
+    
+    // Get current pipeline
+    const pipeline = await new Promise((resolve, reject) => {
+      db.get(
+        'SELECT * FROM pipelines WHERE session_id = ? AND status = ?',
+        [sessionId, 'active'],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+    
+    if (!pipeline) {
+      return res.status(404).json({ error: 'Pipeline not found' });
+    }
+    
+    const chartConfig = JSON.parse(pipeline.chart_config);
+    
+    // Use IBM Bob to translate intent and modify pipeline
+    const modification = await modifyPipelineWithRule(
+      pipeline.code,
+      rule,
+      chartConfig
+    );
+    
+    console.log(`✅ Rule translated: ${modification.changes.length} changes`);
+    
+    // Deactivate old pipeline
+    await new Promise((resolve, reject) => {
+      db.run(
+        'UPDATE pipelines SET status = ? WHERE id = ?',
+        ['superseded', pipeline.id],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+    
+    // Save new pipeline version
+    const newPipelineId = randomUUID();
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO pipelines (id, session_id, code, chart_config, status) VALUES (?, ?, ?, ?, ?)',
+        [
+          newPipelineId,
+          sessionId,
+          modification.modified_code,
+          JSON.stringify(chartConfig),
+          'active'
+        ],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+    
+    // Log rule to audit trail
+    await new Promise((resolve, reject) => {
+      db.run(
+        'INSERT INTO audit_log (session_id, action, details) VALUES (?, ?, ?)',
+        [
+          sessionId,
+          'rule_applied',
+          JSON.stringify({
+            rule,
+            explanation: modification.explanation,
+            changes: modification.changes,
+            old_pipeline_id: pipeline.id,
+            new_pipeline_id: newPipelineId
+          })
+        ],
+        (err) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+    
+    // Load and transform data with new pipeline
+    const rawData = await loadSessionData(sessionId);
+    const transformedData = executePipeline(modification.modified_code, rawData);
+    
+    console.log(`✅ Rule applied successfully, ${transformedData.length} rows in result`);
+    
+    // Return response
+    res.json({
+      success: true,
+      pipelineId: newPipelineId,
+      explanation: modification.explanation,
+      changes: modification.changes,
+      pipeline: {
+        code: modification.modified_code,
+        chartConfig
+      },
+      data: transformedData
+    });
+    
+  } catch (error) {
+    console.error('❌ Rule application error:', error);
+    res.status(500).json({
+      error: 'Failed to apply rule',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/audit/:sessionId
+ * Get audit log for a session
+ */
+router.get('/audit/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    
+    // Get audit log entries
+    const entries = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT * FROM audit_log WHERE session_id = ? ORDER BY timestamp ASC',
+        [sessionId],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+    
+    // Parse JSON details
+    const parsedEntries = entries.map(entry => ({
+      id: entry.id,
+      timestamp: entry.timestamp,
+      action: entry.action,
+      details: JSON.parse(entry.details)
+    }));
+    
+    res.json({
+      success: true,
+      entries: parsedEntries
+    });
+    
+  } catch (error) {
+    console.error('❌ Audit log retrieval error:', error);
+    res.status(500).json({
+      error: 'Failed to retrieve audit log',
+      message: error.message
+    });
+  }
+});
+
 export default router;
 
 // Made with Bob
