@@ -1,6 +1,9 @@
 import { useState } from 'react';
+import axios from 'axios';
 import FileUpload from './components/FileUpload';
 import SchemaViewer from './components/SchemaViewer';
+import PipelineViewer from './components/PipelineViewer';
+import Dashboard from './components/Dashboard';
 import './App.css';
 
 interface UploadData {
@@ -19,26 +22,137 @@ interface UploadData {
   };
 }
 
+interface PipelineData {
+  pipelineId: string;
+  pipeline: {
+    code: string;
+    chartConfig: {
+      xAxis: string;
+      yAxis: string;
+      dataKey: string;
+    };
+  };
+  preview: Array<{
+    label: string;
+    value: number;
+  }>;
+}
+
+interface ChartData {
+  data: Array<{
+    label: string;
+    value: number;
+  }>;
+  chartConfig: {
+    xAxis: string;
+    yAxis: string;
+    dataKey: string;
+  };
+}
+
+const API_BASE_URL = 'http://localhost:3001/api';
+
 function App() {
   const [uploadData, setUploadData] = useState<UploadData | null>(null);
   const [isSchemaApproved, setIsSchemaApproved] = useState(false);
+  const [pipelineData, setPipelineData] = useState<PipelineData | null>(null);
+  const [chartData, setChartData] = useState<ChartData | null>(null);
+  const [isGeneratingPipeline, setIsGeneratingPipeline] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleUploadSuccess = (data: UploadData) => {
     console.log('Upload successful:', data);
     setUploadData(data);
     setIsSchemaApproved(false);
+    setPipelineData(null);
+    setChartData(null);
+    setError(null);
   };
 
-  const handleApproveSchema = () => {
-    console.log('Schema approved for session:', uploadData?.sessionId);
+  const handleApproveSchema = async () => {
+    if (!uploadData) return;
+    
+    console.log('Schema approved for session:', uploadData.sessionId);
     setIsSchemaApproved(true);
-    // TODO: Move to Phase 2 - Pipeline Generation
-    alert('Schema approved! Ready for Phase 2: Pipeline Generation');
+    setError(null);
+    
+    // Automatically generate pipeline
+    await generatePipeline();
+  };
+
+  const generatePipeline = async () => {
+    if (!uploadData) return;
+    
+    setIsGeneratingPipeline(true);
+    setError(null);
+    
+    try {
+      console.log('Generating pipeline for session:', uploadData.sessionId);
+      
+      const response = await axios.post<{ success: boolean } & PipelineData>(
+        `${API_BASE_URL}/pipeline/${uploadData.sessionId}`
+      );
+      
+      if (response.data.success) {
+        console.log('Pipeline generated successfully:', response.data);
+        setPipelineData(response.data);
+        
+        // Load chart data
+        await loadChartData();
+      }
+    } catch (err: any) {
+      console.error('Pipeline generation error:', err);
+      setError(err.response?.data?.message || 'Failed to generate pipeline');
+    } finally {
+      setIsGeneratingPipeline(false);
+    }
+  };
+
+  const loadChartData = async () => {
+    if (!uploadData) return;
+    
+    setIsLoadingData(true);
+    setError(null);
+    
+    try {
+      console.log('Loading chart data for session:', uploadData.sessionId);
+      
+      const response = await axios.get<{ success: boolean } & ChartData>(
+        `${API_BASE_URL}/data/data/${uploadData.sessionId}`
+      );
+      
+      if (response.data.success) {
+        console.log('Chart data loaded successfully:', response.data);
+        setChartData(response.data);
+      }
+    } catch (err: any) {
+      console.error('Data loading error:', err);
+      setError(err.response?.data?.message || 'Failed to load chart data');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  const handleRegeneratePipeline = async () => {
+    setPipelineData(null);
+    setChartData(null);
+    await generatePipeline();
   };
 
   const handleReset = () => {
     setUploadData(null);
     setIsSchemaApproved(false);
+    setPipelineData(null);
+    setChartData(null);
+    setError(null);
+  };
+
+  // Calculate average confidence from schema
+  const getAverageConfidence = () => {
+    if (!uploadData?.schema.columns) return 0.85;
+    const total = uploadData.schema.columns.reduce((sum, col) => sum + col.confidence, 0);
+    return total / uploadData.schema.columns.length;
   };
 
   return (
@@ -105,6 +219,19 @@ function App() {
           </div>
         </div>
 
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <div className="flex items-center">
+              <span className="text-red-600 text-xl mr-2">⚠️</span>
+              <div>
+                <h3 className="font-semibold text-red-800">Error</h3>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Content Area */}
         {!uploadData ? (
           <div className="space-y-6">
@@ -141,13 +268,69 @@ function App() {
               </ol>
             </div>
           </div>
-        ) : (
+        ) : !isSchemaApproved ? (
           <SchemaViewer
             schema={uploadData.schema}
             filename={uploadData.filename}
             rowCount={uploadData.rowCount}
             onApprove={handleApproveSchema}
           />
+        ) : (
+          <div className="space-y-6">
+            {/* Phase 2 Header */}
+            <div className="text-center mb-8">
+              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                Phase 2: Pipeline Generation & Visualization
+              </h2>
+              <p className="text-lg text-gray-600">
+                IBM Bob generates transformation code and visualizes your data
+              </p>
+            </div>
+
+            {/* Loading State */}
+            {isGeneratingPipeline && (
+              <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  Generating Pipeline...
+                </h3>
+                <p className="text-gray-600">
+                  IBM Bob is analyzing your schema and creating transformation code
+                </p>
+              </div>
+            )}
+
+            {/* Pipeline Viewer */}
+            {pipelineData && !isGeneratingPipeline && (
+              <PipelineViewer
+                code={pipelineData.pipeline.code}
+                chartConfig={pipelineData.pipeline.chartConfig}
+                onRegenerate={handleRegeneratePipeline}
+              />
+            )}
+
+            {/* Loading Chart Data */}
+            {isLoadingData && (
+              <div className="bg-white rounded-lg shadow-md p-8 text-center">
+                <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                  Loading Data...
+                </h3>
+                <p className="text-gray-600">
+                  Transforming your data for visualization
+                </p>
+              </div>
+            )}
+
+            {/* Dashboard with Chart */}
+            {chartData && !isLoadingData && (
+              <Dashboard
+                data={chartData.data}
+                chartConfig={chartData.chartConfig}
+                confidence={getAverageConfidence()}
+              />
+            )}
+          </div>
         )}
       </main>
 
@@ -159,7 +342,9 @@ function App() {
               Built with IBM Bob for the IBM Hackathon 2026
             </p>
             <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>Phase 1 of 4</span>
+              <span>
+                {!uploadData ? 'Phase 1' : !isSchemaApproved ? 'Phase 1' : 'Phase 2'} of 4
+              </span>
               <span>•</span>
               <span>MVP Demo</span>
             </div>

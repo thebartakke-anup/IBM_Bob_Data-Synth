@@ -71,6 +71,26 @@ export function initializeDatabase() {
           reject(err);
         } else {
           console.log('Audit log table created/verified');
+        }
+      });
+
+      // Create pipelines table
+      db.run(`
+        CREATE TABLE IF NOT EXISTS pipelines (
+          id TEXT PRIMARY KEY,
+          session_id TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          code TEXT,
+          chart_config TEXT,
+          status TEXT,
+          FOREIGN KEY(session_id) REFERENCES sessions(id)
+        )
+      `, (err) => {
+        if (err) {
+          console.error('Error creating pipelines table:', err.message);
+          reject(err);
+        } else {
+          console.log('Pipelines table created/verified');
           resolve();
         }
       });

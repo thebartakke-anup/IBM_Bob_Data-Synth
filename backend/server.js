@@ -4,6 +4,7 @@ import cors from 'cors';
 import { initializeDatabase } from './db/init.js';
 import { initializeWatsonX, isIBMConfigured } from './services/ibmService.js';
 import uploadRoutes from './routes/upload.js';
+import pipelineRoutes from './routes/pipeline.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +26,8 @@ app.get('/api/health', (req, res) => {
 // API Routes
 app.use('/api/upload', uploadRoutes);
 app.use('/api/schema', uploadRoutes);
+app.use('/api/pipeline', pipelineRoutes);
+app.use('/api/data', pipelineRoutes);
 
 // Initialize database and start server
 async function startServer() {
