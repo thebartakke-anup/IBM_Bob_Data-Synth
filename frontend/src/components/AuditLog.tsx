@@ -16,6 +16,9 @@ export default function AuditLog({ sessionId }: AuditLogProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
 
   useEffect(() => {
     loadAuditLog();
@@ -38,6 +41,58 @@ export default function AuditLog({ sessionId }: AuditLogProps) {
       setError(err instanceof Error ? err.message : 'Failed to load audit log');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const generateSummary = async () => {
+    try {
+      setIsGeneratingSummary(true);
+      const response = await fetch(`http://localhost:3001/api/summary/${sessionId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate summary');
+      }
+
+      const data = await response.json();
+      setSummary(data.summary);
+      setShowSummary(true);
+      
+      // Refresh audit log to show the summary_generated entry
+      await loadAuditLog();
+    } catch (err) {
+      console.error('Error generating summary:', err);
+      setError(err instanceof Error ? err.message : 'Failed to generate summary');
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
+  const exportSession = async () => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/export/${sessionId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to export session');
+      }
+
+      const data = await response.json();
+      
+      // Create a blob and download
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `data-synth-session-${sessionId}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      // Refresh audit log to show the session_exported entry
+      await loadAuditLog();
+    } catch (err) {
+      console.error('Error exporting session:', err);
+      setError(err instanceof Error ? err.message : 'Failed to export session');
     }
   };
 
@@ -64,6 +119,10 @@ export default function AuditLog({ sessionId }: AuditLogProps) {
         return '⚙️';
       case 'rule_applied':
         return '✨';
+      case 'summary_generated':
+        return '📋';
+      case 'session_exported':
+        return '💾';
       default:
         return '📝';
     }
@@ -108,13 +167,61 @@ export default function AuditLog({ sessionId }: AuditLogProps) {
             Complete history of all actions and decisions
           </p>
         </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            {isExpanded ? '▼ Collapse' : '▶ Expand'}
+          </button>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-3 mb-6">
         <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          onClick={generateSummary}
+          disabled={isGeneratingSummary}
+          className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
         >
-          {isExpanded ? '▼ Collapse' : '▶ Expand'}
+          {isGeneratingSummary ? (
+            <>
+              <span className="animate-spin inline-block mr-2">⏳</span>
+              Generating Summary...
+            </>
+          ) : (
+            <>
+              📋 Generate Session Summary
+            </>
+          )}
+        </button>
+        <button
+          onClick={exportSession}
+          className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium"
+        >
+          💾 Export Session Data
         </button>
       </div>
+
+      {/* Summary Display */}
+      {showSummary && summary && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-bold text-blue-900">📊 Session Summary</h3>
+            <button
+              onClick={() => setShowSummary(false)}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="prose prose-sm max-w-none">
+            <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans">
+              {summary}
+            </pre>
+          </div>
+        </div>
+      )}
 
       {entries.length === 0 ? (
         <div className="text-center py-8 text-gray-500">
