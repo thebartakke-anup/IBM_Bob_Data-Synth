@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import { initializeDatabase } from './db/init.js';
 import { initializeWatsonX, isIBMConfigured } from './services/ibmService.js';
+import uploadRoutes from './routes/upload.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -20,6 +21,10 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// API Routes
+app.use('/api/upload', uploadRoutes);
+app.use('/api/schema', uploadRoutes);
 
 // Initialize database and start server
 async function startServer() {
