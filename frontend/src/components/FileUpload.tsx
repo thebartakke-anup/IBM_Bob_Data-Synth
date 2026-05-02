@@ -70,13 +70,30 @@ export default function FileUpload({ onUploadSuccess }: FileUploadProps) {
             setUploadProgress(progress);
           }
         },
+        timeout: 30000, // 30 second timeout
       });
 
       console.log('Upload successful:', response.data);
       onUploadSuccess(response.data);
     } catch (err: any) {
       console.error('Upload error:', err);
-      setError(err.response?.data?.message || 'Failed to upload file');
+      
+      // Provide more detailed error messages
+      let errorMessage = 'Failed to upload file';
+      
+      if (err.code === 'ECONNREFUSED' || err.code === 'ERR_NETWORK') {
+        errorMessage = 'Cannot connect to server. Please ensure the backend is running on http://localhost:3001';
+      } else if (err.code === 'ECONNABORTED') {
+        errorMessage = 'Upload timeout. Please try again with a smaller file.';
+      } else if (err.response) {
+        // Server responded with error
+        errorMessage = err.response.data?.error || err.response.data?.message || `Server error: ${err.response.status}`;
+      } else if (err.request) {
+        // Request made but no response
+        errorMessage = 'No response from server. Please check if the backend is running.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsUploading(false);
       setUploadProgress(0);

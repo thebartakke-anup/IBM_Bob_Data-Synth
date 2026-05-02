@@ -1,0 +1,16 @@
+product_id,product_name,sales_amount,sale_date,region
+101,Laptop,1250,2024-01-10,North
+102,Mouse,45,2024-01-11,South
+103,Keyboard,89,2024-01-12,East
+104,Monitor,350,2024-01-13,West
+105,Headphones,120,2024-01-14,North
+106,Webcam,95,2024-01-15,South
+107,Desk Chair,280,2024-01-16,East
+108,USB Cable,15,2024-01-17,West
+109,External Drive,180,2024-01-18,North
+110,Printer,450,2024-01-19,South
+111,Scanner,320,2024-01-20,East
+112,Tablet,599,2024-01-21,West
+113,Phone Case,25,2024-01-22,North
+114,Charger,35,2024-01-23,South
+115,Screen Protector,12,2024-01-24,East

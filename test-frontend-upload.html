@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test File Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 File Upload Test</h1>
+    <p>This page tests the file upload functionality directly.</p>
+
+    <div class="upload-area">
+        <input type="file" id="fileInput" accept=".csv">
+        <br><br>
+        <button onclick="uploadFile()">Upload File</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="response"></div>
+
+    <script>
+        const API_URL = 'http://localhost:3001/api/upload';
+
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = message;
+        }
+
+        function showResponse(data) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.innerHTML = '<h3>Response:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
+        }
+
+        async function uploadFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showStatus('❌ Please select a file first', 'error');
+                return;
+            }
+
+            if (!file.name.endsWith('.csv')) {
+                showStatus('❌ Please select a CSV file', 'error');
+                return;
+            }
+
+            showStatus('⏳ Uploading file...', 'info');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                console.log('Uploading to:', API_URL);
+                
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('Response data:', data);
+
+                showStatus('✅ Upload successful!', 'success');
+                showResponse(data);
+
+            } catch (error) {
+                console.error('Upload error:', error);
+                showStatus(`❌ Upload failed: ${error.message}`, 'error');
+                
+                // Show detailed error information
+                if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+                    showStatus(`❌ Cannot connect to server at ${API_URL}. Make sure the backend is running.`, 'error');
+                }
+            }
+        }
+
+        // Test server connectivity on page load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch('http://localhost:3001/api/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    showStatus(`✅ Backend is running: ${data.message}`, 'success');
+                }
+            } catch (error) {
+                showStatus('⚠️ Cannot connect to backend. Please start the server on http://localhost:3001', 'error');
+            }
+        });
+    </script>
+</body>
+</html>

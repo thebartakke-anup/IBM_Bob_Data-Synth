@@ -391,37 +391,6 @@ These are **intentionally excluded** to meet timeline and save BobCoins:
 
 ---
 
-## 📅 Daily Schedule (Realistic)
-
-### Day 1 (Monday) — Foundation
-- Morning: Project setup, dependencies
-- Afternoon: Database schema, IBM SDK auth
-- Evening: Test basic connectivity
-
-### Day 2 (Tuesday) — Upload & Schema
-- Morning: Backend upload endpoint + CSV parsing
-- Afternoon: Bob schema detection integration
-- Evening: Frontend schema viewer UI
-
-### Day 3 (Wednesday) — Pipeline & Chart
-- Morning: Bob pipeline generation
-- Afternoon: Execute pipeline, validate output
-- Evening: Render bar chart, code viewer
-
-### Day 4 (Thursday) — Rules Engine
-- Morning: Bob intent translation
-- Afternoon: Rule modification UI
-- Evening: Audit log viewer
-
-### Day 5 (Friday) — Polish & Docs
-- Morning: Session summary generation
-- Afternoon: README, demo video
-- Evening: Final testing, submission
-
-**Buffer:** If ahead of schedule, add watsonx.ai suggestions or second chart type
-
----
-
 ## 🎯 Success Criteria (MVP)
 
 **Must Have (Demo Blockers):**
