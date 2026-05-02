@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Toaster } from 'react-hot-toast';
+import { ToastProvider } from './contexts/ToastContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { useGlobalKeyboardShortcuts } from './hooks/useKeyboard';
 import ThemeToggle from './components/ui/ThemeToggle';
 import FileUpload from './components/FileUpload';
 import SchemaViewer from './components/SchemaViewer';
@@ -9,6 +10,8 @@ import PipelineViewer from './components/PipelineViewer';
 import Dashboard from './components/Dashboard';
 import RuleModifier from './components/RuleModifier';
 import AuditLog from './components/AuditLog';
+import OnboardingTour, { useOnboarding } from './components/OnboardingTour';
+import KeyboardShortcutsHelp, { useKeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import './App.css';
 
 interface UploadData {
@@ -57,7 +60,7 @@ interface ChartData {
 
 const API_BASE_URL = 'http://localhost:3001/api';
 
-function App() {
+function AppContent() {
   const [uploadData, setUploadData] = useState<UploadData | null>(null);
   const [isSchemaApproved, setIsSchemaApproved] = useState(false);
   const [pipelineData, setPipelineData] = useState<PipelineData | null>(null);
@@ -65,6 +68,36 @@ function App() {
   const [isGeneratingPipeline, setIsGeneratingPipeline] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Phase 3: Onboarding and Keyboard Shortcuts
+  const { shouldShowOnboarding, completeOnboarding, startOnboarding } = useOnboarding();
+  const keyboardHelp = useKeyboardShortcutsHelp();
+
+  // Global keyboard shortcuts
+  useGlobalKeyboardShortcuts({
+    onUpload: () => {
+      if (!uploadData) {
+        document.querySelector<HTMLInputElement>('input[type="file"]')?.click();
+      }
+    },
+    onSave: () => {
+      if (pipelineData) {
+        // Trigger download of pipeline code
+        const blob = new Blob([pipelineData.pipeline.code], { type: 'text/javascript' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `pipeline-${uploadData?.sessionId}.js`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
+    },
+    onHelp: () => {
+      keyboardHelp.open();
+    },
+  });
 
   const handleUploadSuccess = (data: UploadData) => {
     console.log('Upload successful:', data);
@@ -182,30 +215,13 @@ function App() {
   };
 
   return (
-    <ThemeProvider>
-      <Toaster
-        position="top-right"
-        toastOptions={{
-          duration: 4000,
-          style: {
-            background: 'var(--bg-primary)',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border-primary)',
-          },
-          success: {
-            iconTheme: {
-              primary: '#22c55e',
-              secondary: '#ffffff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#ef4444',
-              secondary: '#ffffff',
-            },
-          },
-        }}
-      />
+    <>
+      {/* Phase 3: Onboarding Tour */}
+      <OnboardingTour run={shouldShowOnboarding} onComplete={completeOnboarding} />
+      
+      {/* Phase 3: Keyboard Shortcuts Help */}
+      <KeyboardShortcutsHelp isOpen={keyboardHelp.isOpen} onClose={keyboardHelp.close} />
+
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors">
@@ -223,6 +239,20 @@ function App() {
               </div>
             </div>
             <div className="flex items-center space-x-3">
+              <button
+                onClick={() => keyboardHelp.open()}
+                className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                title="Keyboard Shortcuts (Press ?)"
+              >
+                ⌨️
+              </button>
+              <button
+                onClick={() => startOnboarding()}
+                className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                title="Show Tour"
+              >
+                🎓
+              </button>
               <ThemeToggle />
               {uploadData && (
                 <button
@@ -289,14 +319,16 @@ function App() {
         {!uploadData ? (
           <div className="space-y-6">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 Phase 1: CSV Upload & Schema Detection
               </h2>
-              <p className="text-lg text-gray-600">
+              <p className="text-lg text-gray-600 dark:text-gray-400">
                 Upload your CSV file and let IBM Bob analyze the schema
               </p>
             </div>
-            <FileUpload onUploadSuccess={handleUploadSuccess} />
+            <div className="file-upload-zone">
+              <FileUpload onUploadSuccess={handleUploadSuccess} />
+            </div>
             
             {/* Instructions */}
             <div className="max-w-2xl mx-auto mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
@@ -322,20 +354,22 @@ function App() {
             </div>
           </div>
         ) : !isSchemaApproved ? (
-          <SchemaViewer
-            schema={uploadData.schema}
-            filename={uploadData.filename}
-            rowCount={uploadData.rowCount}
-            onApprove={handleApproveSchema}
-          />
+          <div className="schema-viewer">
+            <SchemaViewer
+              schema={uploadData.schema}
+              filename={uploadData.filename}
+              rowCount={uploadData.rowCount}
+              onApprove={handleApproveSchema}
+            />
+          </div>
         ) : (
           <div className="space-y-6">
             {/* Phase 2 Header */}
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                 Phase 2: Pipeline Generation & Visualization
               </h2>
-              <p className="text-lg text-gray-600">
+              <p className="text-lg text-gray-600 dark:text-gray-400">
                 IBM Bob generates transformation code and visualizes your data
               </p>
             </div>
@@ -355,11 +389,13 @@ function App() {
 
             {/* Pipeline Viewer */}
             {pipelineData && !isGeneratingPipeline && (
-              <PipelineViewer
-                code={pipelineData.pipeline.code}
-                chartConfig={pipelineData.pipeline.chartConfig}
-                onRegenerate={handleRegeneratePipeline}
-              />
+              <div className="pipeline-viewer">
+                <PipelineViewer
+                  code={pipelineData.pipeline.code}
+                  chartConfig={pipelineData.pipeline.chartConfig}
+                  onRegenerate={handleRegeneratePipeline}
+                />
+              </div>
             )}
 
             {/* Loading Chart Data */}
@@ -378,19 +414,21 @@ function App() {
             {/* Dashboard with Chart */}
             {chartData && !isLoadingData && (
               <>
-                <Dashboard
-                  data={chartData.data}
-                  chartConfig={chartData.chartConfig}
-                  confidence={getAverageConfidence()}
-                />
+                <div className="dashboard-charts">
+                  <Dashboard
+                    data={chartData.data}
+                    chartConfig={chartData.chartConfig}
+                    confidence={getAverageConfidence()}
+                  />
+                </div>
 
                 {/* Phase 3: Rule Modifier */}
                 <div className="mt-8">
                   <div className="text-center mb-6">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                       Phase 3: Modify Rules
                     </h2>
-                    <p className="text-lg text-gray-600">
+                    <p className="text-lg text-gray-600 dark:text-gray-400">
                       Describe changes in plain English and Bob will update the pipeline
                     </p>
                   </div>
@@ -403,10 +441,10 @@ function App() {
                 {/* Phase 4: Audit Trail */}
                 <div className="mt-8">
                   <div className="text-center mb-6">
-                    <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
                       Phase 4: Audit Trail
                     </h2>
-                    <p className="text-lg text-gray-600">
+                    <p className="text-lg text-gray-600 dark:text-gray-400">
                       Complete history of all actions and decisions
                     </p>
                   </div>
@@ -419,23 +457,38 @@ function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 border-t border-gray-200 bg-white">
+      <footer className="mt-16 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-gray-500">
-              Built with IBM Bob for the IBM Hackathon 2026
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Built with IBM Bob for the IBM Hackathon 2026 • Phase 3 UI/UX Complete ✨
             </p>
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
+            <div className="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+              <button
+                onClick={() => keyboardHelp.open()}
+                className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                Press <kbd className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">?</kbd> for shortcuts
+              </button>
+              <span>•</span>
               <span>
                 {!uploadData ? 'Phase 1' : !isSchemaApproved ? 'Phase 1' : !chartData ? 'Phase 2' : 'Phase 3-4'} of 4
               </span>
-              <span>•</span>
-              <span>MVP Demo</span>
             </div>
           </div>
         </div>
       </footer>
     </div>
+    </>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <ToastProvider>
+        <AppContent />
+      </ToastProvider>
     </ThemeProvider>
   );
 }
