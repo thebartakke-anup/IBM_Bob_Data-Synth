@@ -162,7 +162,7 @@ async function loadSessionData(sessionId) {
  * POST /api/pipeline/:sessionId
  * Generate transformation pipeline for a session
  */
-router.post('/:sessionId', async (req, res) => {
+router.post('/pipeline/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     
@@ -277,7 +277,7 @@ router.post('/:sessionId', async (req, res) => {
  * GET /api/pipeline/:sessionId
  * Retrieve pipeline for a session
  */
-router.get('/:sessionId', async (req, res) => {
+router.get('/pipeline/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     
@@ -470,7 +470,7 @@ async function modifyPipelineWithRule(currentCode, userRule, chartConfig) {
  * POST /api/rules/:sessionId
  * Add a rule modification to the pipeline
  */
-router.post('/rules/:sessionId', async (req, res) => {
+router.post('/pipeline/rules/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     const { rule } = req.body;
@@ -593,7 +593,7 @@ router.post('/rules/:sessionId', async (req, res) => {
  * GET /api/audit/:sessionId
  * Get audit log for a session
  */
-router.get('/audit/:sessionId', async (req, res) => {
+router.get('/pipeline/audit/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     

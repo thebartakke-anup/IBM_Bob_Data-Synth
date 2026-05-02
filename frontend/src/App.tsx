@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import axios from 'axios';
+import { Toaster } from 'react-hot-toast';
+import { ThemeProvider } from './contexts/ThemeContext';
+import ThemeToggle from './components/ui/ThemeToggle';
 import FileUpload from './components/FileUpload';
 import SchemaViewer from './components/SchemaViewer';
 import PipelineViewer from './components/PipelineViewer';
@@ -121,7 +124,7 @@ function App() {
       console.log('Loading chart data for session:', uploadData.sessionId);
       
       const response = await axios.get<{ success: boolean } & ChartData>(
-        `${API_BASE_URL}/data/data/${uploadData.sessionId}`
+        `${API_BASE_URL}/data/${uploadData.sessionId}`
       );
       
       if (response.data.success) {
@@ -179,9 +182,33 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <ThemeProvider>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: 'var(--bg-primary)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-primary)',
+          },
+          success: {
+            iconTheme: {
+              primary: '#22c55e',
+              secondary: '#ffffff',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: '#ef4444',
+              secondary: '#ffffff',
+            },
+          },
+        }}
+      />
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
@@ -191,18 +218,21 @@ function App() {
                 </svg>
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Data-Synth</h1>
-                <p className="text-sm text-gray-500">Powered by IBM Bob</p>
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Data-Synth</h1>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Powered by IBM Bob</p>
               </div>
             </div>
-            {uploadData && (
-              <button
-                onClick={handleReset}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
-                Upload New File
-              </button>
-            )}
+            <div className="flex items-center space-x-3">
+              <ThemeToggle />
+              {uploadData && (
+                <button
+                  onClick={handleReset}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                >
+                  Upload New File
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </header>
@@ -406,6 +436,7 @@ function App() {
         </div>
       </footer>
     </div>
+    </ThemeProvider>
   );
 }
 

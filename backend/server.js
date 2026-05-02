@@ -24,12 +24,8 @@ app.get('/api/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/upload', uploadRoutes);
-app.use('/api/schema', uploadRoutes);
-app.use('/api/pipeline', pipelineRoutes);
-app.use('/api/data', pipelineRoutes);
-app.use('/api/summary', pipelineRoutes);
-app.use('/api/export', pipelineRoutes);
+app.use('/api', uploadRoutes);
+app.use('/api', pipelineRoutes);
 
 // Initialize database and start server
 async function startServer() {

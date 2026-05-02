@@ -152,7 +152,7 @@ async function detectSchema(headers, sampleRows) {
  * POST /api/upload
  * Upload CSV file and detect schema
  */
-router.post('/', upload.single('file'), async (req, res) => {
+router.post('/upload', upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -251,7 +251,7 @@ router.post('/', upload.single('file'), async (req, res) => {
  * GET /api/schema/:sessionId
  * Retrieve schema for a session
  */
-router.get('/:sessionId', async (req, res) => {
+router.get('/schema/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
     
